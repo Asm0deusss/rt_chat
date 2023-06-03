@@ -1,4 +1,5 @@
 #include "file_manager.h"
+#include "common.h"
 #include <errno.h>
 #include <unistd.h>
 
@@ -22,11 +23,4 @@ FILE *create_room(const char *room_name) {
 bool check_room(const char *room_name) {
     struct stat buffer;
     return (access(room_name, F_OK) == 0);
-}
-
-void commit(FILE *cur_file, int pos, Delta delta) {
-    char ch;
-    fseek(cur_file, pos * sizeof(ch), SEEK_SET);
-    fputc(delta.delta, cur_file);
-    fclose(cur_file);
 }

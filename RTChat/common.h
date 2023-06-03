@@ -1,3 +1,5 @@
+#pragma once
+#include <stdio.h>
 
 typedef struct {
     char delta;
@@ -16,5 +18,10 @@ enum Errors {
 
 typedef struct {
     enum Errors error;
-    const char* message;
+    const char *message;
 } ErrorMessage;
+
+typedef struct Room {
+    int users[2];
+    int num_of_connections;
+} Room;
