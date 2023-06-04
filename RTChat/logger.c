@@ -1,5 +1,6 @@
 #include "logger.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -21,7 +22,7 @@ void log_close() {
     }
 }
 
-void log_message(LogLevel level, const char *message) {
+void log_message(LogLevel level, char *fmt, ...) {
     time_t now;
     struct tm *now_local;
     char time_str[32];
@@ -30,6 +31,12 @@ void log_message(LogLevel level, const char *message) {
     now = time(NULL);
     now_local = localtime(&now);
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", now_local);
+
+    char message[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(message, sizeof(message), fmt, args);
+    va_end(args);
 
     snprintf(log_str, sizeof(log_str), "[%s] <%s>: %s\n", time_str,
              log_level_names[level], message);
@@ -40,20 +47,4 @@ void log_message(LogLevel level, const char *message) {
         fprintf(log_file, "%s", log_str);
         fflush(log_file);
     }
-}
-
-void log_debug(const char *message) {
-    log_message(LOG_LEVEL_DEBUG, message);
-}
-
-void log_info(const char *message) {
-    log_message(LOG_LEVEL_INFO, message);
-}
-
-void log_warning(const char *message) {
-    log_message(LOG_LEVEL_WARNING, message);
-}
-
-void log_error(const char *message) {
-    log_message(LOG_LEVEL_ERROR, message);
 }

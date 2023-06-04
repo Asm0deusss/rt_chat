@@ -3,8 +3,11 @@
 
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,39 +38,50 @@ void *process_connected_client(void *data) {
     int port = ntohs(user_ptr->sin_port);
 
     char buf[1024];
+    int room_number;
     sprintf(buf, "%s : %d connected\n", ip, port);
-    log_info(buf);
+    log_message(LOG_LEVEL_INFO, "%s : %d connected\n", ip, port);
 
-    char input_room[2];
-    read(fd, input_room, 2);
-    input_room[2] = 0;
+    while (1) {
+        char input_room[2];
+        read(fd, input_room, 2);
+        input_room[2] = 0;
 
-    int room_number = strtol(input_room, NULL, 10);
+        room_number = strtol(input_room, NULL, 10);
 
-    if (rooms[room_number].num_of_connections == 0) {
-        char room_name[11];
-        snprintf(room_name, 11, "./rooms/%d", room_number);
-        log_info("Room has been created");
-        rooms[room_number].users[0] = fd;
-        rooms[room_number].num_of_connections = 1;
-    } else if (rooms[room_number].num_of_connections == 1) {
-        log_info("Have room");
-        rooms[room_number].users[1] = fd;
-        rooms[room_number].num_of_connections = 2;
+        if (rooms[room_number].num_of_connections == 2) {
+            dprintf(fd, "%c", '1');
+            continue;
+        }
+        if (rooms[room_number].num_of_connections == 0) {
+            char room_name[11];
+            snprintf(room_name, 11, "./rooms/%d", room_number);
+            log_message(LOG_LEVEL_INFO, "Room with number %d has been created",
+                        room_number);
+            rooms[room_number].users[0] = fd;
+            rooms[room_number].num_of_connections = 1;
+            dprintf(fd, "%c", '0');
+        } else if (rooms[room_number].num_of_connections == 1) {
+            log_message(LOG_LEVEL_INFO, "Second user connected to room %d",
+                        room_number);
+            rooms[room_number].users[1] = fd;
+            rooms[room_number].num_of_connections = 2;
+            dprintf(fd, "%c", '0');
+        }
+
+        break;
     }
 
     while (1) {
         char cur_char;
         int valread = read(fd, &cur_char, 1);
         if (valread < 0) {
-            break;
+            continue;
         }
 
         if (cur_char == 127) {
             send_to_users('\b', rooms[room_number]);
-
             send_to_users(' ', rooms[room_number]);
-
             send_to_users('\b', rooms[room_number]);
             continue;
         }
@@ -78,20 +92,29 @@ void *process_connected_client(void *data) {
     pthread_exit(0);
 }
 
-int main(int argc, char const *argv[]) {
+void handle_signal(int signo) {
+    return;
+}
 
-    log_open("./log.log");
-    log_info("Started server");
+int main(int argc, char const *argv[]) {
+    struct sigaction sa = {
+        .sa_flags = SA_RESTART,
+        .sa_handler = handle_signal,
+    };
+    sigaction(SIGPIPE, &sa, NULL);
+
+    log_open("./server.log");
+    log_message(LOG_LEVEL_INFO, "Starting the server");
 
     int server_fd, new_socket, valread;
     struct sockaddr_in address;
     int opt = 1;
     int addrlen = sizeof(address);
     char buffer[1024] = {0};
-    char *hello = "Hello from server";
+
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        log_error("Socker error");
+        log_message(LOG_LEVEL_ERROR, "Socker error");
         log_close();
         exit(EXIT_FAILURE);
     }
@@ -99,7 +122,8 @@ int main(int argc, char const *argv[]) {
     // Forcefully attaching socket to the port 8080
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
                    sizeof(opt))) {
-        log_error("SetSockPort error");
+        log_message(LOG_LEVEL_ERROR, "SetSockPort error");
+
         log_close();
         exit(EXIT_FAILURE);
     }
@@ -113,20 +137,21 @@ int main(int argc, char const *argv[]) {
 
     // Forcefully attaching socket to the port 8080
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        log_error("Bind failed");
+        log_message(LOG_LEVEL_ERROR, "Bind failed");
+
         log_close();
         exit(EXIT_FAILURE);
     }
 
     if (listen(server_fd, 3) < 0) {
-        perror("listen");
+        log_message(LOG_LEVEL_ERROR, "Listen error");
         exit(EXIT_FAILURE);
     }
 
     while (1) {
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
                                  (socklen_t *)&addrlen)) < 0) {
-            log_error("Accept failed");
+            log_message(LOG_LEVEL_ERROR, "Accept failed");
             log_close();
             exit(EXIT_FAILURE);
         }
@@ -140,7 +165,8 @@ int main(int argc, char const *argv[]) {
     // // closing the listening socket
     shutdown(server_fd, SHUT_RDWR);
 
-    log_info("Shutting down the server");
+    log_message(LOG_LEVEL_INFO, "Shutting down the server");
+
     log_close();
     return 0;
 }

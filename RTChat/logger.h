@@ -16,12 +16,4 @@ int log_open(const char *filename);
 
 void log_close();
 
-void log_message(LogLevel level, const char *message);
-
-void log_debug(const char *message);
-
-void log_info(const char *message);
-
-void log_warning(const char *message);
-
-void log_error(const char *message);
+void log_message(LogLevel level, char *fmt, ...);
